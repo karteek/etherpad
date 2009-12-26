@@ -17,7 +17,7 @@ How to
 from my MBP. Do update them to meet your machine's settings.
 	$ source env.sh
 
-3. Create a database "etherpad" with password "password" on a MySQL database server
+3. Create a database "etherpad", add a user "etherpad" with password "password" on a MySQL database server. Grant all privileges for on database etherpad to etherpad@localhost
 
 4. Update etherpad.SQL_JDBC_URL, etherpad.SQL_USERNAME, etherpad.SQL_PASSWORD and
 etherpad.adminPass in the file "etherpad/etc/etherpad.localdev-default.properties"
@@ -32,7 +32,7 @@ etherpad.adminPass in the file "etherpad/etc/etherpad.localdev-default.propertie
 How to Enable File Imports
 1. File Imports depend on cos.jar (http://www.servlets.com/cos/) - com.oreilly.servlet
 
-2. Do read the license http://www.servlets.com/cos/license.htmls
+2. Do read the license http://www.servlets.com/cos/license.html
 
 3. Even now, if you want to continue with imports,
 	- Download cos.jar from the site and copy it to infrastructure/lib folder
