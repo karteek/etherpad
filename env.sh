@@ -1,0 +1,6 @@
+export JAVA_HOME="/Library/Java/Home"
+export SCALA_HOME="/opt/local/share/scala"
+export JAVA="$JAVA_HOME/bin/java"
+export SCALA="$SCALA_HOME/bin/scala"
+export PATH="$JAVA_HOME/bin:$SCALA_HOME/bin:/Applications/MAMP/Library/bin:$PATH"
+export MYSQL_CONNECTOR_JAR=`pwd`"/lib/mysql-connector-java-5.1.10-bin.jar"
