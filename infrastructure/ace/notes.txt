@@ -1,3 +1,4 @@
+XXX This is a scratch file I used for notes; information may be out of date or random -- dgreenspan
 
 - rename ace2.js to ace.js
 

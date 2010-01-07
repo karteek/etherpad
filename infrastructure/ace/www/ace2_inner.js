@@ -1158,7 +1158,7 @@ function OUTER(gscope) {
 
 
   function getCharType(charIndex) {
-    return '';
+    return 'p';
   }
 
   var observedChanges;
