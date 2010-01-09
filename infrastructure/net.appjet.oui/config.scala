@@ -114,6 +114,9 @@ object config {
     else
       ("", Integer.parseInt(s))
 
+  @ConfigParam("Whether to show the port numbers to the outside world (false: assume ports visible from the outside are the default http/https ports)")
+  def hidePorts = boolOrElse("hidePorts", false);
+
   @ConfigParam("[host:]port on which to serve the app. Default: 8080.")
               { val argName = "[host:]port" }
   def listen = stringOrElse("listen", "8080");
