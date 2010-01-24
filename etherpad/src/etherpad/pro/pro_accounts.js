@@ -30,10 +30,14 @@ import("etherpad.utils.*");
 import("etherpad.pro.domains");
 import("etherpad.control.pro.account_control");
 import("etherpad.pro.pro_utils");
+import("etherpad.pro.pro_ldap_support.*");
 import("etherpad.pro.pro_quotas");
 import("etherpad.pad.padusers");
 import("etherpad.log");
 import("etherpad.billing.team_billing");
+
+import("process.*");
+import("fastJSON")
 
 jimport("org.mindrot.BCrypt");
 jimport("java.lang.System.out.println");
@@ -82,18 +86,23 @@ function validateEmailDomainPair(email, domainId) {
 }
 
 /* if domainId is null, then use domainId of current request. */
-function createNewAccount(domainId, fullName, email, password, isAdmin) {
+function createNewAccount(domainId, fullName, email, password, isAdmin, skipValidation) {
   if (!domainId) {
     domainId = domains.getRequestDomainId();
+  }
+  if (!skipValidation) {
+    skipValidation = false;
   }
   email = trim(email);
   isAdmin = !!isAdmin; // convert to bool
 
   // validation
-  var e;
-  e = validateEmail(email); if (e) { throw Error(e); }
-  e = validateFullName(fullName); if (e) { throw Error(e); }
-  e = validatePassword(password); if (e) { throw Error(e); }
+  if (!skipValidation) {
+    var e;
+    e = validateEmail(email); if (e) { throw Error(e); }
+    e = validateFullName(fullName); if (e) { throw Error(e); }
+    e = validatePassword(password); if (e) { throw Error(e); }
+  }
 
   // xss normalization
   fullName = toHTML(fullName);
@@ -212,6 +221,27 @@ function doesAdminExist() {
   });
 }
 
+function attemptSingleSignOn() {
+  if(!appjet.config['etherpad.SSOScript']) return null;
+
+  // pass request.cookies to a small user script
+  var file = appjet.config['etherpad.SSOScript'];
+
+  var cmd = exec(file);
+
+  // note that this will block until script execution returns
+  var result = cmd.write(fastJSON.stringify(request.cookies)).result();
+  var val = false;
+
+  // we try to parse the result as a JSON string, if not, return null.
+  try {
+    if(!!(val=fastJSON.parse(result))) {
+      return val;
+    }
+  } catch(e) {}
+  return null;
+}
+
 function getSessionProAccount() {
   if (sessions.isAnEtherpadAdmin()) {
     return getEtherpadAdminAccount();
@@ -231,6 +261,25 @@ function isAccountSignedIn() {
   if (getSessionProAccount()) {
     return true;
   } else {
+    // if the user is not signed in, check to see if he should be signed in
+    // by calling an external script.
+    if(appjet.config['etherpad.SSOScript']) {
+      var ssoResult = attemptSingleSignOn();
+      if(ssoResult && ('email' in ssoResult)) {
+        var user = getAccountByEmail(ssoResult['email']);
+        if (!user) {
+          var email = ssoResult['email'];
+          var pass = ssoResult['password'] || "";
+          var name = ssoResult['fullname'] || "unnamed";
+          createNewAccount(null, name, email, pass, false, true);
+          user = getAccountByEmail(email, null);
+        }
+
+        signInSession(user);
+        return true;
+      }
+    }
+
     return false;
   }
 }
@@ -290,6 +339,47 @@ function requireAdminAccount() {
 
 /* returns undefined on success, error string otherise. */
 function authenticateSignIn(email, password) {
+  // blank passwords are not allowed to sign in.
+  if (password == "") return "Please provide a password.";
+
+  // If the email ends with our ldap suffix...
+  var isLdapSuffix = getLDAP() && getLDAP().isLDAPSuffix(email);
+
+  if(isLdapSuffix && !getLDAP()) {
+    return "LDAP not yet configured. Please contact your system admininstrator.";
+  }
+
+  // if there is an error in the LDAP configuration, return the error message
+  if(getLDAP() && getLDAP().error) {
+    return getLDAP().error + " Please contact your system administrator.";
+  }
+
+  if(isLdapSuffix && getLDAP()) {
+    var ldapuser = email.substr(0, email.indexOf(getLDAP().getLDAPSuffix()));
+    var ldapResult = getLDAP().login(ldapuser, password);
+
+    if (ldapResult.error == true) {
+      return ldapResult.message + "";
+    }
+
+    var accountRecord = getAccountByEmail(email, null);
+
+    // if this is the first time this user has logged in, create a user
+    // for him/her
+    if (!accountRecord) {
+      // password to store in database -- a blank password means the user
+      // cannot authenticate normally (e.g. must go through SSO or LDAP)
+      var ldapPass = "";
+
+      // create a new user (skipping validation of email/users/passes)
+      createNewAccount(null, ldapResult.getFullName(), email, ldapPass, false, true);
+      accountRecord = getAccountByEmail(email, null);
+    }
+
+    signInSession(accountRecord);
+    return undefined; // success
+  }
+
   var accountRecord = getAccountByEmail(email, null);
   if (!accountRecord) {
     return "Account not found: "+email;
